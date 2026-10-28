@@ -1,4 +1,4 @@
-# Teemo Alp · 3D Model
+# Teemo Oğuz · 3D Model
 
 **[Modeli tarayıcıda görüntüle →](https://alptekincanatar.github.io/teemo-alp-3d/)**
 
