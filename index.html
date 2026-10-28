@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Teemo Alp · 3D Model</title>
+<style>
+  :root { --bg:#14171c; --bg2:#222833; --fg:#eef1f5; --muted:#9aa4b2; --accent:#e8b04a; --line:#ffffff22; }
+  .light { --bg:#dfe3e8; --bg2:#f4f6f8; --fg:#1b2027; --muted:#5b6675; --accent:#b4761b; --line:#00000022; }
+  * { box-sizing:border-box }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif; overflow:hidden }
+  #stage { position:fixed; inset:0; background:radial-gradient(ellipse at 50% 40%, var(--bg2), var(--bg) 70%) }
+  canvas { display:block; width:100%; height:100%; touch-action:none; cursor:grab }
+  canvas:active { cursor:grabbing }
+  header { position:fixed; top:0; left:0; right:0; padding:14px 16px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; pointer-events:none }
+  h1 { margin:0; font-size:18px; letter-spacing:.02em }
+  h1 small { display:block; color:var(--muted); font-weight:400; font-size:12px; margin-top:2px }
+  .bar { position:fixed; left:50%; bottom:max(16px, env(safe-area-inset-bottom)); transform:translateX(-50%); display:flex; flex-wrap:wrap; justify-content:center; gap:8px; width:calc(100% - 32px); max-width:560px }
+  button { appearance:none; border:1px solid var(--line); background:color-mix(in srgb, var(--bg2) 85%, transparent); color:var(--fg); padding:9px 14px; border-radius:999px; font:inherit; cursor:pointer; backdrop-filter:blur(6px) }
+  button:hover { border-color:var(--accent) }
+  button[aria-pressed="true"] { background:var(--accent); color:#1a1305; border-color:var(--accent) }
+  #load { position:fixed; inset:0; display:grid; place-items:center; color:var(--muted); pointer-events:none; transition:opacity .4s }
+  #load.done { opacity:0 }
+  #err { position:fixed; left:16px; right:16px; top:70px; color:#ff8c8c; display:none }
+  .hint { position:fixed; right:16px; top:16px; color:var(--muted); font-size:12px; text-align:right; pointer-events:none }
+  @media (max-width:520px) { .hint { display:none } }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<header>
+  <h1>Teemo Alp <small>LoL tarzı 3D model · sürükle: döndür · tekerlek: yakınlaş</small></h1>
+</header>
+<div class="hint">Sağ tık + sürükle: kaydır</div>
+<div id="load">Model yükleniyor…</div>
+<div id="err"></div>
+<div class="bar">
+  <button id="rot" aria-pressed="true">Otomatik döndür</button>
+  <button data-v="front">Ön</button>
+  <button data-v="side">Yan</button>
+  <button data-v="back">Arka</button>
+  <button data-v="face">Yüz</button>
+  <button id="theme" aria-pressed="false">Açık zemin</button>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./lib/three/build/three.module.js", "three/addons/": "./lib/three/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 100);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.autoRotate = true; controls.autoRotateSpeed = 1.4;
+controls.minPolarAngle = 0.15; controls.maxPolarAngle = Math.PI - 0.5;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x6b7280, 1.5));
+const key = new THREE.DirectionalLight(0xfff1dd, 2.2); key.position.set(2.5, 3.5, 4); scene.add(key);
+const rim = new THREE.DirectionalLight(0x9db8ff, 1.2); rim.position.set(-3, 2, -3); scene.add(rim);
+
+let center = new THREE.Vector3(), size = new THREE.Vector3(), dist = 3;
+function setView(name) {
+  const d = dist * Math.max(1, 0.95 / camera.aspect);
+  const t = center.clone();
+  let pos;
+  if (name === 'side')      pos = new THREE.Vector3(t.x + d, t.y, t.z);
+  else if (name === 'back') pos = new THREE.Vector3(t.x, t.y, t.z - d);
+  else if (name === 'face') { t.y = center.y + size.y * 0.22; pos = new THREE.Vector3(t.x, t.y, t.z + d * 0.42); }
+  else                      pos = new THREE.Vector3(t.x, t.y, t.z + d);
+  camera.position.copy(pos); controls.target.copy(t); controls.update();
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+new GLTFLoader().load('./models/character.glb', (g) => {
+  const model = g.scene;
+  model.traverse(o => { if (o.isMesh && o.material) { o.material.side = THREE.FrontSide; if (o.material.map) o.material.map.anisotropy = 8; } });
+  const box = new THREE.Box3().setFromObject(model);
+  box.getCenter(center); box.getSize(size);
+  model.position.y -= box.min.y; center.y = size.y / 2;
+  scene.add(model);
+  dist = Math.max(size.y, size.x) * 2.4;
+  controls.minDistance = dist * 0.25; controls.maxDistance = dist * 2.5;
+  setView('front');
+  document.getElementById('load').classList.add('done');
+}, undefined, (e) => {
+  document.getElementById('load').classList.add('done');
+  const el = document.getElementById('err'); el.style.display = 'block';
+  el.textContent = 'Model yüklenemedi. Dosyayı bir web sunucusundan açın (GitHub Pages ya da "python3 -m http.server"); çift tıklayıp açmak çalışmaz.';
+  console.error(e);
+});
+
+document.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => {
+  controls.autoRotate = false; rotBtn.setAttribute('aria-pressed', 'false'); setView(b.dataset.v);
+}));
+const rotBtn = document.getElementById('rot');
+rotBtn.addEventListener('click', () => { controls.autoRotate = !controls.autoRotate; rotBtn.setAttribute('aria-pressed', String(controls.autoRotate)); });
+const themeBtn = document.getElementById('theme');
+themeBtn.addEventListener('click', () => {
+  const light = document.body.classList.toggle('light');
+  themeBtn.setAttribute('aria-pressed', String(light));
+});
+renderer.domElement.addEventListener('pointerdown', () => { controls.autoRotate = false; rotBtn.setAttribute('aria-pressed', 'false'); });
+
+(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+window.__ready = () => document.getElementById('load').classList.contains('done');
+</script>
+</body>
+</html>
